@@ -1,0 +1,19 @@
+version: 0.2
+phases:
+  install:
+    commands:
+      - set -euxo pipefail
+      - curl -sSL https://github.com/notaryproject/notation/releases/download/v1.1.0/notation-linux-amd64.tar.gz | tar xz && mv notation /usr/local/bin/
+      - curl -sSL https://github.com/aws/notation-aws-signer/releases/download/v1.2.0/notation-aws-signer-linux-amd64.tar.gz | tar xz && mv notation-aws-signer /usr/local/bin/
+  build:
+    commands:
+      - IMAGE_URI=$(jq -r '.imageUri' image.json)
+      - DIGEST=$(jq -r '.digest' image.json)
+      - IMAGE_REF="${IMAGE_URI}@${DIGEST}"
+      - echo "Verify signature for $IMAGE_REF"
+      - notation verify --plugin aws-signer "$IMAGE_REF"
+      - jq -n --arg ref "$IMAGE_REF" '{imageRef:$ref, signatureVerified:true}' > signature.json
+artifacts:
+  files:
+    - signature.json
+    - image.json
