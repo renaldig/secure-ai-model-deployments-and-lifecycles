@@ -1,0 +1,33 @@
+{
+  "ticketId": "PROMO-2025-11-08-001",
+  "model": {
+    "name": "checkout-inference",
+    "version": "v1.3.0",
+    "artifact": {
+      "imageUri": "123456789012.dkr.ecr.us-west-2.amazonaws.com/demo-reco",
+      "digest": "sha256:YOUR_DIGEST_HERE"
+    }
+  },
+  "links": {
+    "checklist": "https://github.com/<org>/<repo>/blob/main/PROMOTION_CHECKLIST.md",
+    "modelCard": "https://github.com/<org>/<repo>/blob/main/MODEL_CARD.md",
+    "sbom": "https://github.com/<org>/<repo>/blob/main/sbom.json",
+    "signature": "https://github.com/<org>/<repo>/blob/main/signature.json",
+    "evidenceBundle": "https://github.com/<org>/<repo>/pull/123"
+  },
+  "policy": {
+    "signatureVerified": true,
+    "criticalFindings": 0,
+    "accuracy": { "metric": "roc_auc", "value": 0.93, "minAcceptable": 0.90 },
+    "latency": { "p95_ms": 540, "maxAcceptable": 600 },
+    "unsafeOutputRate": { "value": 0.03, "maxAcceptable": 0.05 }
+  },
+  "approvers": [
+    { "role": "Model Owner", "name": "Alice Smith", "email": "alice@example.com", "decision": "APPROVE", "date": "2025-11-08" },
+    { "role": "Independent Reviewer", "name": "Bob Lee", "email": "bob@example.com", "decision": "APPROVE", "date": "2025-11-08" },
+    { "role": "Platform/SRE", "name": "Casey Tan", "email": "casey@example.com", "decision": "APPROVE", "date": "2025-11-08" }
+  ],
+  "riskSummary": "Meets accuracy and safety thresholds; 0 critical vulnerabilities; instant rollback ready via alias.",
+  "waivers": [],
+  "notes": "If safety alarm fires, rollback to baseline and enable SAFE_MODE."
+}
