@@ -1,0 +1,31 @@
+version: 0.2
+env:
+  variables:
+    REPO: demo-reco
+    IMAGE_TAG: latest
+phases:
+  install:
+    commands:
+      - set -euxo pipefail
+      - apk add --no-cache curl jq || true
+      - curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.17.0
+  pre_build:
+    commands:
+      - aws --version
+      - echo "ECR login"
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - IMAGE_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO:$IMAGE_TAG"
+  build:
+    commands:
+      - docker build -t "$IMAGE_URI" .
+      - docker push "$IMAGE_URI"
+      - echo "Resolve digest"
+      - DIGEST=$(aws ecr batch-get-image --repository-name "$REPO" --image-ids imageTag="$IMAGE_TAG" --query 'images[0].imageId.imageDigest' --output text --region "$AWS_REGION")
+      - IMAGE_REF="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO@$DIGEST"
+      - echo "IMAGE_REF=$IMAGE_REF"
+      - jq -n --arg uri "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO" --arg tag "$IMAGE_TAG" --arg digest "$DIGEST" '{imageUri:$uri, tag:$tag, digest:$digest}' > image.json
+      - syft "$IMAGE_REF" -o json > sbom.json
+artifacts:
+  files:
+    - image.json
+    - sbom.json
