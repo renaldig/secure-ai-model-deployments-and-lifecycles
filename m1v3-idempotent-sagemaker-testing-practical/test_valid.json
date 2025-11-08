@@ -1,0 +1,7 @@
+{
+  "id": "order-1001",
+  "features": { "amount": 49.95 },
+  "email": "alice.smith@example.com",
+  "phone": "+1-415-555-1212",
+  "notes": "friendly message that is longer than sixty characters to show clipping happens here"
+}
