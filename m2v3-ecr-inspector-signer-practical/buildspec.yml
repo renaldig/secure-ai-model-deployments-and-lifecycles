@@ -1,0 +1,46 @@
+version: 0.2
+env:
+  variables:
+    REPO: "demo-reco"
+    IMAGE_TAG: "latest"
+phases:
+  install:
+    commands:
+      - set -euxo pipefail
+      - echo "Installing notation + aws-signer plugin..."
+      - curl -sSL https://github.com/notaryproject/notation/releases/download/v1.1.0/notation-linux-amd64.tar.gz | tar xz && mv notation /usr/local/bin/
+      - curl -sSL https://github.com/aws/notation-aws-signer/releases/download/v1.2.0/notation-aws-signer-linux-amd64.tar.gz | tar xz && mv notation-aws-signer /usr/local/bin/
+      - yum install -y jq || true
+  pre_build:
+    commands:
+      - aws --version
+      - echo "ECR login..."
+      - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+      - IMAGE_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO:$IMAGE_TAG"
+  build:
+    commands:
+      - echo "Build & push $IMAGE_URI"
+      - docker build -t "$IMAGE_URI" .
+      - docker push "$IMAGE_URI"
+      - echo "Resolve immutable digest..."
+      - DIGEST=$(aws ecr batch-get-image --repository-name "$REPO" --image-ids imageTag="$IMAGE_TAG" --query 'images[0].imageId.imageDigest' --output text --region "$AWS_REGION")
+      - IMAGE_REF="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO@$DIGEST"
+      - echo "IMAGE_REF=$IMAGE_REF"
+      - jq -n --arg uri "$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO" --arg tag "$IMAGE_TAG" --arg digest "$DIGEST" '{imageUri:$uri, tag:$tag, digest:$digest}' > image.json
+      - cat image.json
+      - echo "SIGN -> VERIFY (AWS Signer / Notation)"
+      - notation sign --plugin aws-signer --id "$SIGNING_PROFILE_ARN" "$IMAGE_REF"
+      - notation verify --plugin aws-signer "$IMAGE_REF"
+      - echo "Query Inspector for CRITICAL findings on this digest..."
+      - FILTER=$(jq -n --arg repo "$REPO" --arg digest "$DIGEST" '{severity:[{comparison:"EQUALS",value:"CRITICAL"}], ecrImageRepositoryName:[{comparison:"EQUALS",value:$repo}], ecrImageHash:[{comparison:"EQUALS",value:$digest}]}')
+      - CRIT=$(aws inspector2 list-findings --filter-criteria "$FILTER" --region "$AWS_REGION" | jq '.findings | length')
+      - echo "Critical findings: $CRIT"
+      - if [ "$CRIT" -gt 0 ]; then echo "❌ Gate failed: CRITICAL vulnerabilities present for $IMAGE_REF"; exit 1; fi
+  post_build:
+    commands:
+      - echo "✅ Gate passed: Image is signed and has zero CRITICAL findings"
+      - jq -n --arg ref "$IMAGE_REF" '{imageRef:$ref, policy:"zero_critical", result:"PASS"}' > gate.json
+artifacts:
+  files:
+    - image.json
+    - gate.json
